@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Golf Score" />
+  <title>Golf Score</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0f172a; overflow-x: hidden; }
+    select option { background: #1e293b; color: #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+const CLUBS = ["1W", "3W", "5W", "7W", "UT", "6I", "7I", "8I", "9I", "PW", "AW", "SW", "PT"];
+const RATINGS = ["○", "△", "×"];
+const RATING_COLORS = { "○": "#4ade80", "△": "#facc15", "×": "#f87171" };
+
+// コシガヤゴルフクラブ（OUT: 4,4,3,5,4,3,4,5,4 / IN: 4,5,3,4,4,3,4,5,4）
+const COURSE_PRESETS = [
+  {
+    name: "KOSHIGAYA GOLF CLUB",
+    pars: [4,4,3,5,4,3,4,5,4, 4,5,3,4,4,3,4,5,4],
+  },
+];
+
+const DEFAULT_PARS = [4,4,3,4,5,4,3,4,5,4,4,3,5,4,4,3,4,5];
+const STORAGE_KEY = "golf_rounds";
+
+function newRound(preset) {
+  const p = preset || COURSE_PRESETS[0];
+  return {
+    id: Date.now(),
+    courseName: p.name,
+    date: new Date().toISOString().split("T")[0],
+    pars: [...p.pars],
+    holes: Array.from({ length: 18 }, () => ({ shots: [], parOn: false, putts: 0 })),
+  };
+}
+
+function loadRounds() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveRounds(rounds) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(rounds)); } catch {}
+}
+
+// ---- ShotRow ----
+function ShotRow({ shot, index, onChange, onRemove }) {
+  if (shot.isPenaltyShot) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: "0.5rem",
+        padding: "0.35rem 0.5rem",
+        background: "rgba(248,113,113,0.07)",
+        border: "1px dashed rgba(248,113,113,0.3)",
+        borderRadius: "8px", marginBottom: "0.3rem", fontSize: "0.75rem",
+      }}>
+        <span style={{ color: "#9ca3af", fontWeight: 600, minWidth: "1.2rem" }}>{index + 1}</span>
+        <span style={{ color: "#f87171", fontWeight: 700, flex: 1 }}>🚫 罰打（自動追加）</span>
+        <button onClick={onRemove} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "1rem", padding: "0 0.2rem" }}>×</button>
+      </div>
+    );
+  }
+  return (
+    <div style={{
+      padding: "0.5rem 0.6rem",
+      background: "rgba(255,255,255,0.04)",
+      borderRadius: "8px",
+      marginBottom: "0.4rem",
+    }}>
+      {/* 1行目：番号・番手・OB・PEN・削除 */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.35rem" }}>
+        <span style={{ color: "#9ca3af", fontWeight: 600, fontSize: "0.75rem", minWidth: "1.1rem" }}>{index + 1}</span>
+        <select value={shot.club} onChange={e => onChange({ ...shot, club: e.target.value })} style={{ ...selectStyle, flex: 1 }}>
+          <option value="">番手</option>
+          {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <button onClick={() => onChange({ ...shot, ob: !shot.ob })} style={{
+          padding: "0.2rem 0.5rem",
+          border: shot.ob ? "2px solid #f87171" : "1px solid rgba(255,255,255,0.15)",
+          borderRadius: "5px", background: shot.ob ? "#f8717122" : "transparent",
+          color: shot.ob ? "#f87171" : "#6b7280", cursor: "pointer", fontSize: "0.65rem", fontWeight: 700,
+        }}>OB</button>
+        <button onClick={() => onChange({ ...shot, penalty: !shot.penalty })} style={{
+          padding: "0.2rem 0.5rem",
+          border: shot.penalty ? "2px solid #facc15" : "1px solid rgba(255,255,255,0.15)",
+          borderRadius: "5px", background: shot.penalty ? "#facc1522" : "transparent",
+          color: shot.penalty ? "#facc15" : "#6b7280", cursor: "pointer", fontSize: "0.65rem", fontWeight: 700,
+        }}>PEN</button>
+        <button onClick={onRemove} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "1rem", padding: "0 0.1rem" }}>×</button>
+      </div>
+      {/* 2行目：評価ボタン（大きめ） */}
+      <div style={{ display: "flex", gap: "0.4rem" }}>
+        {RATINGS.map(r => (
+          <button key={r} onClick={() => onChange({ ...shot, rating: shot.rating === r ? "" : r })} style={{
+            flex: 1, padding: "0.45rem 0",
+            border: shot.rating === r ? `2px solid ${RATING_COLORS[r]}` : "1px solid rgba(255,255,255,0.15)",
+            borderRadius: "8px",
+            background: shot.rating === r ? `${RATING_COLORS[r]}22` : "transparent",
+            color: shot.rating === r ? RATING_COLORS[r] : "#6b7280",
+            cursor: "pointer", fontSize: "1rem", fontWeight: 700, transition: "all 0.15s",
+          }}>{r}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---- HoleCard ----
+function HoleCard({ hole, holeNum, par, onParChange, onShotsChange, onHoleChange, isActive, onClick }) {
+  const shotCount = hole.shots.length;
+  const score = holeScore(hole);
+  const diff = score - par;
+  const diffLabel = diff === 0 ? "E" : diff > 0 ? `+${diff}` : `${diff}`;
+  const diffColor = diff < -1 ? "#c084fc" : diff === -1 ? "#4ade80" : diff === 0 ? "#60a5fa" : "#f87171";
+  const addShot = () => onShotsChange([...hole.shots, { club: "", rating: "", ob: false, penalty: false, isPenaltyShot: false }]);
+
+  const updateShot = (i, newShot) => {
+    const prev = hole.shots[i];
+    let shots = hole.shots.map((sh, idx) => idx === i ? newShot : sh);
+
+    const penaltyAdded = (!prev.ob && newShot.ob) || (!prev.penalty && newShot.penalty);
+    const penaltyRemoved = (prev.ob && !newShot.ob) || (prev.penalty && !newShot.penalty);
+
+    if (penaltyAdded) {
+      // 罰打ショットをこのショットの直後に挿入
+      const penShot = { club: "", rating: "", ob: false, penalty: false, isPenaltyShot: true };
+      shots = [...shots.slice(0, i + 1), penShot, ...shots.slice(i + 1)];
+    } else if (penaltyRemoved) {
+      // 直後のisPenaltyShot=trueのショットを1つだけ削除
+      const nextIdx = i + 1;
+      if (shots[nextIdx] && shots[nextIdx].isPenaltyShot) {
+        shots = shots.filter((_, idx) => idx !== nextIdx);
+      }
+    }
+    onShotsChange(shots);
+  };
+
+  const removeShot = (i) => onShotsChange(hole.shots.filter((_, idx) => idx !== i));
+
+  return (
+    <div onClick={!isActive ? onClick : undefined} style={{
+      background: isActive ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)",
+      border: isActive ? "1px solid rgba(99,179,237,0.5)" : "1px solid rgba(255,255,255,0.08)",
+      borderRadius: "14px", marginBottom: "0.6rem", overflow: "hidden",
+      cursor: isActive ? "default" : "pointer", transition: "all 0.2s",
+    }}>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0.7rem 1rem", background: isActive ? "rgba(99,179,237,0.1)" : "transparent",
+      }} onClick={isActive ? onClick : undefined}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.8rem" }}>
+          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.3rem", color: "#e2e8f0", letterSpacing: "0.05em" }}>
+            HOLE {String(holeNum).padStart(2, "0")}
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{ color: "#6b7280", fontSize: "0.72rem" }}>PAR</span>
+            <select value={par}
+              onChange={e => { e.stopPropagation(); onParChange(Number(e.target.value)); }}
+              onClick={e => e.stopPropagation()}
+              style={{ ...selectStyle, width: "2.8rem", textAlign: "center" }}>
+              {[3,4,5].map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            {score > 0 && (
+              <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.3rem", color: diffColor, marginLeft: "0.2rem" }}>{score}</span>
+            )}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {score > 0 && (
+            <span style={{ fontSize: "0.85rem", fontWeight: 700, color: diffColor, background: `${diffColor}22`, padding: "0.15rem 0.45rem", borderRadius: "5px" }}>{diffLabel}</span>
+          )}
+          {hole.parOn && <span style={{ fontSize: "0.65rem", color: "#4ade80", background: "rgba(74,222,128,0.15)", border: "1px solid rgba(74,222,128,0.3)", padding: "0.1rem 0.35rem", borderRadius: "4px" }}>GIR</span>}
+          {hole.putts > 0 && <span style={{ fontSize: "0.65rem", color: "#a78bfa", background: "rgba(167,139,250,0.15)", border: "1px solid rgba(167,139,250,0.3)", padding: "0.1rem 0.35rem", borderRadius: "4px" }}>{hole.putts}PT</span>}
+          <span style={{ color: "#6b7280", fontSize: "0.8rem" }}>{isActive ? "▲" : "▼"}</span>
+        </div>
+      </div>
+      {isActive && (
+        <div style={{ padding: "0.5rem 0.8rem 0.8rem" }} onClick={e => e.stopPropagation()}>
+          {hole.shots.map((s, i) => (
+            <ShotRow key={i} shot={s} index={i} onChange={s => updateShot(i, s)} onRemove={() => removeShot(i)} />
+          ))}
+          <button onClick={addShot} style={{
+            width: "100%", padding: "0.5rem", marginTop: "0.3rem",
+            background: "rgba(99,179,237,0.1)", border: "1px dashed rgba(99,179,237,0.4)",
+            borderRadius: "8px", color: "#63b3ed", cursor: "pointer",
+            fontSize: "0.82rem", fontWeight: 600, letterSpacing: "0.05em",
+          }}>＋ 打数を追加</button>
+
+          {/* パーオン・パット数 */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: "0.7rem",
+            marginTop: "0.8rem", padding: "0.6rem 0.7rem",
+            background: "rgba(255,255,255,0.03)", borderRadius: "10px",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}>
+            {/* パーオン（自動判定＋手動上書き可） */}
+            <button
+              onClick={() => onHoleChange({ ...hole, parOn: !hole.parOn })}
+              style={{
+                flex: 1, padding: "0.4rem 0",
+                border: hole.parOn ? "2px solid #4ade80" : "1px solid rgba(255,255,255,0.15)",
+                borderRadius: "8px",
+                background: hole.parOn ? "rgba(74,222,128,0.15)" : "transparent",
+                color: hole.parOn ? "#4ade80" : "#6b7280",
+                cursor: "pointer", fontSize: "0.78rem", fontWeight: 700,
+              }}
+            >{hole.parOn ? "🟢 パーオン" : "⬜ 非パーオン"}</button>
+
+            {/* パット数 */}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <span style={{ color: "#9ca3af", fontSize: "0.72rem", whiteSpace: "nowrap" }}>パット数</span>
+              <button onClick={() => onHoleChange({ ...hole, putts: Math.max(0, (hole.putts || 0) - 1) })}
+                style={{ width: "1.6rem", height: "1.6rem", borderRadius: "50%", border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "#e2e8f0", cursor: "pointer", fontSize: "0.9rem", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+              <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.4rem", color: "#e2e8f0", minWidth: "1.5rem", textAlign: "center" }}>{hole.putts || 0}</span>
+              <button onClick={() => onHoleChange({ ...hole, putts: (hole.putts || 0) + 1 })}
+                style={{ width: "1.6rem", height: "1.6rem", borderRadius: "50%", border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "#e2e8f0", cursor: "pointer", fontSize: "0.9rem", display: "flex", alignItems: "center", justifyContent: "center" }}>＋</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const selectStyle = {
+  background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+  borderRadius: "6px", color: "#e2e8f0", padding: "0.25rem 0.3rem",
+  fontSize: "0.78rem", outline: "none", cursor: "pointer",
+};
+
+const holeScore = (h) => h.shots.length + (h.putts || 0);
+
+// ---- ScoreCard ----
+function ScoreCard({ holes, pars }) {
+  const total = holes.reduce((s, h) => s + holeScore(h), 0);
+  const totalPar = pars.reduce((a, b) => a + b, 0);
+  const diff = total - totalPar;
+  return (
+    <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "0.8rem", marginBottom: "1.2rem" }}>
+      <div style={{ color: "#9ca3af", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.6rem" }}>SCORE CARD</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(19, 1fr)", gap: "0.1rem" }}>
+        {holes.map((h, i) => {
+          const score = holeScore(h);
+          const d = score - pars[i];
+          const c = score === 0 ? "#4b5563" : d < -1 ? "#c084fc" : d === -1 ? "#4ade80" : d === 0 ? "#60a5fa" : "#f87171";
+          return (
+            <div key={i} style={{ textAlign: "center" }}>
+              <div style={{ color: "#6b7280", fontSize: "0.5rem" }}>{i + 1}</div>
+              <div style={{ color: c, fontWeight: 700, fontSize: "0.8rem", fontFamily: "'Bebas Neue', sans-serif" }}>{score || "-"}</div>
+            </div>
+          );
+        })}
+        <div style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.1)" }}>
+          <div style={{ color: "#6b7280", fontSize: "0.5rem" }}>計</div>
+          <div style={{ color: "#e2e8f0", fontWeight: 700, fontSize: "0.8rem", fontFamily: "'Bebas Neue', sans-serif" }}>{total || "-"}</div>
+        </div>
+      </div>
+      {total > 0 && (
+        <div style={{ marginTop: "0.5rem", fontSize: "0.82rem", color: "#9ca3af" }}>
+          スコア：<span style={{ color: diff <= 0 ? "#4ade80" : "#f87171", fontWeight: 700 }}>{diff === 0 ? "Even" : diff > 0 ? `+${diff}` : `${diff}`}</span>
+          {" "}合計打数：<span style={{ color: "#e2e8f0", fontWeight: 700 }}>{total}</span>{" "}Par {totalPar}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- 履歴一覧 ----
+function HistoryList({ rounds, onSelect, onDelete }) {
+  if (rounds.length === 0) return (
+    <div style={{ textAlign: "center", color: "#6b7280", padding: "3rem 0", fontSize: "0.9rem" }}>
+      保存済みのラウンドはありません
+    </div>
+  );
+  return (
+    <div>
+      {[...rounds].reverse().map(r => {
+        const total = r.holes.reduce((s, h) => s + holeScore(h), 0);
+        const totalPar = r.pars.reduce((a, b) => a + b, 0);
+        const diff = total - totalPar;
+        return (
+          <div key={r.id} style={{
+            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: "14px", padding: "0.9rem 1rem", marginBottom: "0.6rem",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <div onClick={() => onSelect(r)} style={{ flex: 1, cursor: "pointer" }}>
+              <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#e2e8f0", marginBottom: "0.2rem" }}>
+                {r.courseName || "（ゴルフ場名なし）"}
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "#9ca3af" }}>{r.date}</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
+              {total > 0 && (
+                <>
+                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.5rem", color: "#e2e8f0" }}>{total}</span>
+                  <span style={{
+                    fontSize: "0.8rem", fontWeight: 700,
+                    color: diff <= 0 ? "#4ade80" : "#f87171",
+                    background: diff <= 0 ? "#4ade8022" : "#f8717122",
+                    padding: "0.15rem 0.45rem", borderRadius: "5px",
+                  }}>{diff === 0 ? "E" : diff > 0 ? `+${diff}` : `${diff}`}</span>
+                </>
+              )}
+              <button onClick={() => onDelete(r.id)} style={{
+                background: "none", border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "6px", color: "#6b7280", cursor: "pointer",
+                fontSize: "0.72rem", padding: "0.2rem 0.5rem",
+              }}>削除</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---- メインアプリ ----
+function GolfApp() {
+  const [rounds, setRounds] = useState(() => loadRounds());
+  const [current, setCurrent] = useState(() => {
+    const saved = loadRounds();
+    return saved.length > 0 ? saved[saved.length - 1] : newRound();
+  });
+  const [activeHole, setActiveHole] = useState(null);
+  const [view, setView] = useState("play");
+  const [saveMsg, setSaveMsg] = useState("");
+
+  // currentが変わるたびにlocalStorageへ自動保存
+  useEffect(() => {
+    const updated = rounds.some(r => r.id === current.id)
+      ? rounds.map(r => r.id === current.id ? current : r)
+      : [...rounds, current];
+    setRounds(updated);
+    saveRounds(updated);
+  }, [current]);
+
+  const handleSave = () => {
+    setSaveMsg("保存しました ✓");
+    setTimeout(() => setSaveMsg(""), 2000);
+  };
+
+  const handleNewRound = () => {
+    const r = newRound();
+    setCurrent(r);
+    setActiveHole(null);
+    setView("play");
+  };
+
+  const handleSelectRound = (r) => {
+    setCurrent(r);
+    setActiveHole(null);
+    setView("play");
+  };
+
+  const handleDeleteRound = (id) => {
+    const updated = rounds.filter(r => r.id !== id);
+    setRounds(updated);
+    saveRounds(updated);
+    if (current.id === id) {
+      setCurrent(updated.length > 0 ? updated[updated.length - 1] : newRound());
+    }
+  };
+
+  const updatePar = (i, val) => setCurrent({ ...current, pars: current.pars.map((p, idx) => idx === i ? val : p) });
+  const updateHole = (i, h) => setCurrent({ ...current, holes: current.holes.map((ho, idx) => idx === i ? h : ho) });
+
+  const obCount = current.holes.reduce((s, h) => s + h.shots.filter(sh => sh.ob).length, 0);
+  const penCount = current.holes.reduce((s, h) => s + h.shots.filter(sh => sh.penalty).length, 0);
+  const ratingCounts = RATINGS.reduce((acc, r) => {
+    acc[r] = current.holes.reduce((s, h) => s + h.shots.filter(sh => sh.rating === r).length, 0);
+    return acc;
+  }, {});
+
+  // パーオン・パット集計
+  const holesPlayed = current.holes.filter(h => h.shots.length > 0).length;
+  const parOnCount = current.holes.filter(h => h.parOn).length;
+  const totalPutts = current.holes.reduce((s, h) => s + (h.putts || 0), 0);
+  const holesWithPutts = current.holes.filter(h => h.putts > 0).length;
+  const avgPutts = holesWithPutts > 0 ? (totalPutts / holesWithPutts).toFixed(1) : "-";
+  const parOnHoles = current.holes.filter(h => h.parOn);
+  const nonParOnHoles = current.holes.filter(h => !h.parOn && h.putts > 0);
+  const avgPuttsParOn = parOnHoles.filter(h => h.putts > 0).length > 0
+    ? (parOnHoles.reduce((s, h) => s + (h.putts || 0), 0) / parOnHoles.filter(h => h.putts > 0).length).toFixed(1) : "-";
+  const avgPuttsNonParOn = nonParOnHoles.length > 0
+    ? (nonParOnHoles.reduce((s, h) => s + (h.putts || 0), 0) / nonParOnHoles.length).toFixed(1) : "-";
+
+  return (
+    <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #0f172a 0%, #1e293b 60%, #0f2027 100%)", color: "#e2e8f0", fontFamily: "'Noto Sans JP', sans-serif", overflowX: "hidden", maxWidth: "100vw" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+
+      {/* ヘッダー */}
+      <div style={{
+        background: "rgba(0,0,0,0.4)", backdropFilter: "blur(10px)",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        padding: "1rem 1rem 0.8rem", position: "sticky", top: 0, zIndex: 10,
+        boxSizing: "border-box", width: "100%",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.7rem" }}>
+          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.5rem", letterSpacing: "0.1em", color: "#63b3ed" }}>⛳ GOLF SCORE</span>
+          <div style={{ display: "flex", gap: "0.4rem" }}>
+            {["play", "summary", "history", "overall"].map(v => (
+              <button key={v} onClick={() => setView(v)} style={{
+                padding: "0.3rem 0.5rem", borderRadius: "20px",
+                border: view === v ? "none" : "1px solid rgba(255,255,255,0.15)",
+                background: view === v ? "#63b3ed" : "transparent",
+                color: view === v ? "#0f172a" : "#9ca3af",
+                cursor: "pointer", fontSize: "0.68rem", fontWeight: 700,
+              }}>{v === "play" ? "入力" : v === "summary" ? "集計" : v === "history" ? "履歴" : "全体"}</button>
+            ))}
+          </div>
+        </div>
+
+        {view !== "history" && view !== "overall" && (
+          <>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <input placeholder="ゴルフ場名" value={current.courseName}
+                onChange={e => setCurrent({ ...current, courseName: e.target.value })}
+                style={{ flex: 1, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "0.45rem 0.7rem", color: "#e2e8f0", fontSize: "0.85rem", outline: "none" }}
+              />
+              <input type="date" value={current.date}
+                onChange={e => setCurrent({ ...current, date: e.target.value })}
+                style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "0.45rem 0.6rem", color: "#e2e8f0", fontSize: "0.82rem", outline: "none", colorScheme: "dark" }}
+              />
+            </div>
+            {/* コースプリセット */}
+            <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.4rem", flexWrap: "wrap" }}>
+              <span style={{ color: "#6b7280", fontSize: "0.68rem", alignSelf: "center", whiteSpace: "nowrap" }}>よく行くコース：</span>
+              {COURSE_PRESETS.map(p => (
+                <button key={p.name} onClick={() => setCurrent({ ...current, courseName: p.name, pars: [...p.pars] })}
+                  style={{
+                    padding: "0.2rem 0.6rem", borderRadius: "12px", fontSize: "0.68rem", cursor: "pointer", fontWeight: 600,
+                    background: current.courseName === p.name ? "rgba(99,179,237,0.2)" : "rgba(255,255,255,0.05)",
+                    border: current.courseName === p.name ? "1px solid rgba(99,179,237,0.5)" : "1px solid rgba(255,255,255,0.12)",
+                    color: current.courseName === p.name ? "#63b3ed" : "#9ca3af",
+                  }}
+                >⛳ {p.name}</button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div style={{ padding: "1rem 1rem 5rem", boxSizing: "border-box", width: "100%" }}>
+
+        {/* 入力タブ */}
+        {view === "play" && (
+          <>
+            {/* 保存バー */}
+            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.7rem", marginBottom: "0.8rem" }}>
+              {saveMsg && <span style={{ color: "#4ade80", fontSize: "0.78rem" }}>{saveMsg}</span>}
+              <button onClick={handleSave} style={{
+                padding: "0.35rem 1rem", borderRadius: "20px",
+                background: "rgba(74,222,128,0.15)", border: "1px solid rgba(74,222,128,0.4)",
+                color: "#4ade80", cursor: "pointer", fontSize: "0.78rem", fontWeight: 700,
+              }}>💾 保存</button>
+              <button onClick={handleNewRound} style={{
+                padding: "0.35rem 1rem", borderRadius: "20px",
+                background: "rgba(99,179,237,0.1)", border: "1px solid rgba(99,179,237,0.3)",
+                color: "#63b3ed", cursor: "pointer", fontSize: "0.78rem", fontWeight: 700,
+              }}>＋ 新ラウンド</button>
+            </div>
+            <ScoreCard holes={current.holes} pars={current.pars} />
+            {current.holes.map((h, i) => (
+              <HoleCard key={i} hole={h} holeNum={i + 1} par={current.pars[i]}
+                onParChange={v => updatePar(i, v)}
+                onShotsChange={shots => {
+                  const autoParOn = shots.length <= current.pars[i] - 2 && shots.length > 0;
+                  updateHole(i, { ...h, shots, parOn: autoParOn });
+                }}
+                onHoleChange={updated => updateHole(i, updated)}
+                isActive={activeHole === i}
+                onClick={() => setActiveHole(activeHole === i ? null : i)}
+              />
+            ))}
+          </>
+        )}
+
+        {/* 集計タブ */}
+        {view === "summary" && (
+          <div>
+            <div style={{ marginBottom: "1rem", color: "#9ca3af", fontSize: "0.8rem" }}>
+              {current.courseName || "（ゴルフ場名未入力）"} ／ {current.date}
+            </div>
+            <ScoreCard holes={current.holes} pars={current.pars} />
+
+            {/* パーオン・パット統計 */}
+            <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "1rem", marginBottom: "1rem" }}>
+              <div style={{ color: "#9ca3af", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.8rem" }}>パーオン / パット</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "0.8rem" }}>
+                <div style={{ textAlign: "center", background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: "10px", padding: "0.7rem" }}>
+                  <div style={{ color: "#4ade80", fontSize: "0.68rem", fontWeight: 700, marginBottom: "0.3rem" }}>パーオン率</div>
+                  <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.8rem", color: "#4ade80" }}>{parOnCount}<span style={{ fontSize: "1rem" }}>/{holesPlayed || 18}</span></div>
+                  <div style={{ color: "#4ade80", fontSize: "0.75rem", opacity: 0.8, marginTop: "0.2rem" }}>
+                    {holesPlayed > 0 ? Math.round((parOnCount / holesPlayed) * 100) : 0}%
+                  </div>
+                </div>
+                <div style={{ textAlign: "center", background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: "10px", padding: "0.7rem" }}>
+                  <div style={{ color: "#a78bfa", fontSize: "0.68rem", fontWeight: 700, marginBottom: "0.3rem" }}>総パット数</div>
+                  <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.8rem", color: "#a78bfa" }}>{totalPutts}</div>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                {[["平均パット", avgPutts, "#e2e8f0"], ["GIR時", avgPuttsParOn, "#4ade80"], ["非GIR時", avgPuttsNonParOn, "#f87171"]].map(([label, val, color]) => (
+                  <div key={label} style={{ textAlign: "center", background: "rgba(255,255,255,0.03)", borderRadius: "8px", padding: "0.5rem" }}>
+                    <div style={{ color: "#6b7280", fontSize: "0.62rem", marginBottom: "0.2rem" }}>{label}</div>
+                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.3rem", color }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.7rem", marginBottom: "1rem" }}>
+              {[["OB", obCount, "#f87171"], ["ペナルティ", penCount, "#facc15"]].map(([label, count, color]) => (
+                <div key={label} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${color}33`, borderRadius: "12px", padding: "0.8rem", textAlign: "center" }}>
+                  <div style={{ color, fontSize: "0.72rem", fontWeight: 700, marginBottom: "0.3rem" }}>{label}</div>
+                  <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "2rem", color }}>{count}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "1rem", marginBottom: "1rem" }}>
+              <div style={{ color: "#9ca3af", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.7rem" }}>ショット評価</div>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                {RATINGS.map(r => (
+                  <div key={r} style={{ flex: 1, textAlign: "center" }}>
+                    <div style={{ color: RATING_COLORS[r], fontSize: "1.1rem", marginBottom: "0.2rem" }}>{r}</div>
+                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.6rem", color: RATING_COLORS[r] }}>{ratingCounts[r]}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "1rem" }}>
+              <div style={{ color: "#9ca3af", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.7rem" }}>番手使用回数</div>
+              {CLUBS.map(c => {
+                const cnt = current.holes.reduce((s, h) => s + h.shots.filter(sh => sh.club === c).length, 0);
+                if (cnt === 0) return null;
+                const max = Math.max(...CLUBS.map(cc => current.holes.reduce((s, h) => s + h.shots.filter(sh => sh.club === cc).length, 0)));
+                return (
+                  <div key={c} style={{ marginBottom: "0.4rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ width: "2.5rem", fontSize: "0.78rem", color: "#9ca3af" }}>{c}</span>
+                    <div style={{ flex: 1, height: "8px", background: "rgba(255,255,255,0.08)", borderRadius: "4px", overflow: "hidden" }}>
+                      <div style={{ width: `${(cnt / max) * 100}%`, height: "100%", background: "#63b3ed", borderRadius: "4px" }} />
+                    </div>
+                    <span style={{ fontSize: "0.78rem", color: "#e2e8f0", width: "1.5rem", textAlign: "right" }}>{cnt}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 番手×評価クロス集計 */}
+            {(() => {
+              const usedClubs = CLUBS.filter(c => current.holes.some(h => h.shots.some(sh => sh.club === c && sh.rating)));
+              if (usedClubs.length === 0) return null;
+              return (
+                <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "1rem", marginTop: "1rem" }}>
+                  <div style={{ color: "#9ca3af", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.8rem" }}>番手別ショット評価</div>
+                  {/* ヘッダー行 */}
+                  <div style={{ display: "grid", gridTemplateColumns: "2.5rem 1fr 1fr 1fr 1fr", gap: "0.3rem", marginBottom: "0.4rem" }}>
+                    <span />
+                    {RATINGS.map(r => (
+                      <div key={r} style={{ textAlign: "center", fontSize: "0.75rem", color: RATING_COLORS[r], fontWeight: 700 }}>{r}</div>
+                    ))}
+                  </div>
+                  {usedClubs.map(c => {
+                    const shots = current.holes.flatMap(h => h.shots.filter(sh => sh.club === c && sh.rating));
+                    const total = shots.length;
+                    return (
+                      <div key={c} style={{ display: "grid", gridTemplateColumns: "2.5rem 1fr 1fr 1fr 1fr", gap: "0.3rem", marginBottom: "0.35rem", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.75rem", color: "#9ca3af", fontWeight: 600 }}>{c}</span>
+                        {RATINGS.map(r => {
+                          const cnt = shots.filter(sh => sh.rating === r).length;
+                          const pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
+                          return (
+                            <div key={r} style={{ textAlign: "center" }}>
+                              <div style={{
+                                margin: "0 auto",
+                                width: "100%",
+                                padding: "0.2rem 0",
+                                borderRadius: "6px",
+                                background: cnt > 0 ? `${RATING_COLORS[r]}22` : "transparent",
+                                border: cnt > 0 ? `1px solid ${RATING_COLORS[r]}44` : "1px solid transparent",
+                              }}>
+                                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1rem", color: cnt > 0 ? RATING_COLORS[r] : "#374151" }}>{cnt > 0 ? cnt : "-"}</div>
+                                {cnt > 0 && <div style={{ fontSize: "0.55rem", color: RATING_COLORS[r], opacity: 0.7 }}>{pct}%</div>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* 履歴タブ */}
+        {view === "history" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <span style={{ color: "#9ca3af", fontSize: "0.8rem" }}>保存済み：{rounds.length}ラウンド</span>
+              <button onClick={handleNewRound} style={{
+                padding: "0.35rem 1rem", borderRadius: "20px",
+                background: "rgba(99,179,237,0.1)", border: "1px solid rgba(99,179,237,0.3)",
+                color: "#63b3ed", cursor: "pointer", fontSize: "0.78rem", fontWeight: 700,
+              }}>＋ 新ラウンド</button>
+            </div>
+            <HistoryList rounds={rounds} onSelect={handleSelectRound} onDelete={handleDeleteRound} />
+          </div>
+        )}
+
+        {/* 全体集計タブ */}
+        {view === "overall" && (() => {
+          if (rounds.length === 0) return (
+            <div style={{ textAlign: "center", color: "#6b7280", padding: "3rem 0" }}>保存済みのラウンドがありません</div>
+          );
+
+          const allHoles = rounds.flatMap(r => r.holes);
+          const allShots = allHoles.flatMap(h => h.shots);
+          const totalRounds = rounds.length;
+
+          // スコア集計
+          const totalScore = rounds.reduce((s, r) => s + r.holes.reduce((ss, h) => ss + holeScore(h), 0), 0);
+          const totalPar = rounds.reduce((s, r) => s + r.pars.reduce((a, b) => a + b, 0), 0);
+          const avgScore = (totalScore / totalRounds).toFixed(1);
+          const avgDiff = ((totalScore - totalPar) / totalRounds).toFixed(1);
+
+          // OB・ペナルティ
+          const totalOB = allShots.filter(s => s.ob).length;
+          const totalPen = allShots.filter(s => s.penalty).length;
+          const avgOB = (totalOB / totalRounds).toFixed(1);
+          const avgPen = (totalPen / totalRounds).toFixed(1);
+
+          // パーオン
+          const totalParOn = allHoles.filter(h => h.parOn).length;
+          const totalHolesPlayed = allHoles.filter(h => h.shots.length > 0).length;
+          const parOnPct = totalHolesPlayed > 0 ? Math.round((totalParOn / totalHolesPlayed) * 100) : 0;
+
+          // パット
+          const totalPutts = allHoles.reduce((s, h) => s + (h.putts || 0), 0);
+          const holesWithPutts = allHoles.filter(h => h.putts > 0).length;
+          const avgPuttsAll = holesWithPutts > 0 ? (totalPutts / holesWithPutts).toFixed(1) : "-";
+          const parOnH = allHoles.filter(h => h.parOn && h.putts > 0);
+          const nonParOnH = allHoles.filter(h => !h.parOn && h.putts > 0);
+          const avgPuttsGIR = parOnH.length > 0 ? (parOnH.reduce((s, h) => s + h.putts, 0) / parOnH.length).toFixed(1) : "-";
+          const avgPuttsNGIR = nonParOnH.length > 0 ? (nonParOnH.reduce((s, h) => s + h.putts, 0) / nonParOnH.length).toFixed(1) : "-";
+
+          // 評価
+          const ratingCountsAll = RATINGS.reduce((acc, r) => {
+            acc[r] = allShots.filter(s => s.rating === r).length;
+            return acc;
+          }, {});
+
+          // 番手使用回数
+          const clubCounts = CLUBS.map(c => ({ club: c, cnt: allShots.filter(s => s.club === c).length })).filter(x => x.cnt > 0);
+          const maxClubCnt = Math.max(...clubCounts.map(x => x.cnt), 1);
+
+          // 番手×評価
+          const usedClubsAll = CLUBS.filter(c => allShots.some(s => s.club === c && s.rating));
+
+          return (
+            <div>
+              <div style={{ color: "#9ca3af", fontSize: "0.78rem", marginBottom: "1rem" }}>
+                {totalRounds}ラウンド分の累計データ
+              </div>
+
+              {/* スコアサマリー */}
+              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "1rem", marginBottom: "1rem" }}>
+                <div style={{ color: "#9ca3af", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.7rem" }}>スコアサマリー</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                  {[["平均スコア", avgScore, "#e2e8f0"], ["平均±Par", Number(avgDiff) >= 0 ? `+${avgDiff}` : avgDiff, Number(avgDiff) <= 0 ? "#4ade80" : "#f87171"], ["ラウンド数", totalRounds, "#63b3ed"]].map(([label, val, color]) => (
+                    <div key={label} style={{ textAlign: "center", background: "rgba(255,255,255,0.03)", borderRadius: "10px", padding: "0.7rem 0.3rem" }}>
+                      <div style={{ color: "#6b7280", fontSize: "0.62rem", marginBottom: "0.3rem" }}>{label}</div>
+                      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.5rem", color }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* OB・ペナルティ */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.7rem", marginBottom: "1rem" }}>
+                {[["OB（合計）", totalOB, avgOB, "#f87171"], ["ペナルティ（合計）", totalPen, avgPen, "#facc15"]].map(([label, total, avg, color]) => (
+                  <div key={label} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${color}33`, borderRadius: "12px", padding: "0.8rem", textAlign: "center" }}>
+                    <div style={{ color, fontSize: "0.65rem", fontWeight: 700, marginBottom: "0.2rem" }}>{label}</div>
+                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.8rem", color }}>{total}</div>
+                    <div style={{ color, fontSize: "0.65rem", opacity: 0.7 }}>平均 {avg}/R</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* パーオン・パット */}
+              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "1rem", marginBottom: "1rem" }}>
+                <div style={{ color: "#9ca3af", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.8rem" }}>パーオン / パット</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "0.8rem" }}>
+                  <div style={{ textAlign: "center", background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: "10px", padding: "0.7rem" }}>
+                    <div style={{ color: "#4ade80", fontSize: "0.68rem", fontWeight: 700, marginBottom: "0.3rem" }}>パーオン率</div>
+                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.8rem", color: "#4ade80" }}>{(totalParOn / totalRounds).toFixed(1)}<span style={{ fontSize: "1rem" }}>/18</span></div>
+                    <div style={{ color: "#4ade80", fontSize: "0.75rem", opacity: 0.8 }}>{parOnPct}%</div>
+                  </div>
+                  <div style={{ textAlign: "center", background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: "10px", padding: "0.7rem" }}>
+                    <div style={{ color: "#a78bfa", fontSize: "0.68rem", fontWeight: 700, marginBottom: "0.3rem" }}>平均パット数/R</div>
+                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.8rem", color: "#a78bfa" }}>{(totalPutts / totalRounds).toFixed(1)}</div>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                  {[["平均パット", avgPuttsAll, "#e2e8f0"], ["GIR時", avgPuttsGIR, "#4ade80"], ["非GIR時", avgPuttsNGIR, "#f87171"]].map(([label, val, color]) => (
+                    <div key={label} style={{ textAlign: "center", background: "rgba(255,255,255,0.03)", borderRadius: "8px", padding: "0.5rem" }}>
+                      <div style={{ color: "#6b7280", fontSize: "0.62rem", marginBottom: "0.2rem" }}>{label}</div>
+                      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.3rem", color }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ショット評価 */}
+              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "1rem", marginBottom: "1rem" }}>
+                <div style={{ color: "#9ca3af", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.7rem" }}>ショット評価（累計）</div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  {RATINGS.map(r => (
+                    <div key={r} style={{ flex: 1, textAlign: "center" }}>
+                      <div style={{ color: RATING_COLORS[r], fontSize: "1.1rem", marginBottom: "0.2rem" }}>{r}</div>
+                      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.6rem", color: RATING_COLORS[r] }}>{ratingCountsAll[r]}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 番手使用回数 */}
+              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "1rem", marginBottom: "1rem" }}>
+                <div style={{ color: "#9ca3af", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.7rem" }}>番手使用回数（累計）</div>
+                {clubCounts.map(({ club, cnt }) => (
+                  <div key={club} style={{ marginBottom: "0.4rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ width: "2.5rem", fontSize: "0.78rem", color: "#9ca3af" }}>{club}</span>
+                    <div style={{ flex: 1, height: "8px", background: "rgba(255,255,255,0.08)", borderRadius: "4px", overflow: "hidden" }}>
+                      <div style={{ width: `${(cnt / maxClubCnt) * 100}%`, height: "100%", background: "#63b3ed", borderRadius: "4px" }} />
+                    </div>
+                    <span style={{ fontSize: "0.78rem", color: "#e2e8f0", width: "1.5rem", textAlign: "right" }}>{cnt}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* 番手×評価クロス集計 */}
+              {usedClubsAll.length > 0 && (
+                <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "1rem" }}>
+                  <div style={{ color: "#9ca3af", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.8rem" }}>番手別ショット評価（累計）</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "2.5rem 1fr 1fr 1fr", gap: "0.3rem", marginBottom: "0.4rem" }}>
+                    <span />
+                    {RATINGS.map(r => (
+                      <div key={r} style={{ textAlign: "center", fontSize: "0.75rem", color: RATING_COLORS[r], fontWeight: 700 }}>{r}</div>
+                    ))}
+                  </div>
+                  {usedClubsAll.map(c => {
+                    const shots = allShots.filter(s => s.club === c && s.rating);
+                    const total = shots.length;
+                    return (
+                      <div key={c} style={{ display: "grid", gridTemplateColumns: "2.5rem 1fr 1fr 1fr", gap: "0.3rem", marginBottom: "0.35rem", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.75rem", color: "#9ca3af", fontWeight: 600 }}>{c}</span>
+                        {RATINGS.map(r => {
+                          const cnt = shots.filter(s => s.rating === r).length;
+                          const pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
+                          return (
+                            <div key={r} style={{ textAlign: "center" }}>
+                              <div style={{ padding: "0.2rem 0", borderRadius: "6px", background: cnt > 0 ? `${RATING_COLORS[r]}22` : "transparent", border: cnt > 0 ? `1px solid ${RATING_COLORS[r]}44` : "1px solid transparent" }}>
+                                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1rem", color: cnt > 0 ? RATING_COLORS[r] : "#374151" }}>{cnt > 0 ? cnt : "-"}</div>
+                                {cnt > 0 && <div style={{ fontSize: "0.55rem", color: RATING_COLORS[r], opacity: 0.7 }}>{pct}%</div>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+    </div>
+  );
+}
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<GolfApp />);
+  </script>
+</body>
+</html>
