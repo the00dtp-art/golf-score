@@ -263,6 +263,9 @@ function TrendGraph({ rounds, activeMetric, setActiveMetric }) {
     { key:"avgPutt", label:"平均パット", color:"#fb923c", values: sorted.map(r => { const ph = r.holes.filter(h => h.putts>0); return ph.length>0 ? parseFloat((ph.reduce((s,h) => s+h.putts,0)/ph.length).toFixed(1)) : 0; }) },
     { key:"dbl", label:"ダブルボギー%", color:"#f87171", values: sorted.map(r => { const hp = r.holes.filter(h => hs(h)>0).length; return hp>0 ? Math.round((r.holes.filter((h,i) => hs(h)>=r.pars[i]+2).length/hp)*100) : 0; }) },
     { key:"tp", label:"3パット%", color:"#facc15", values: sorted.map(r => { const ph = r.holes.filter(h => h.putts>0).length; return ph>0 ? Math.round((r.holes.filter(h => (h.putts||0)>=3).length/ph)*100) : 0; }) },
+    { key:"par3", label:"Par3平均", color:"#67e8f9", values: sorted.map(r => { const m = r.holes.map((h,i) => ({h,par:r.pars[i]})).filter(x => x.par===3 && hs(x.h)>0); return m.length>0 ? parseFloat((m.reduce((s,x) => s+hs(x.h),0)/m.length).toFixed(2)) : 0; }) },
+    { key:"par4", label:"Par4平均", color:"#86efac", values: sorted.map(r => { const m = r.holes.map((h,i) => ({h,par:r.pars[i]})).filter(x => x.par===4 && hs(x.h)>0); return m.length>0 ? parseFloat((m.reduce((s,x) => s+hs(x.h),0)/m.length).toFixed(2)) : 0; }) },
+    { key:"par5", label:"Par5平均", color:"#fca5a5", values: sorted.map(r => { const m = r.holes.map((h,i) => ({h,par:r.pars[i]})).filter(x => x.par===5 && hs(x.h)>0); return m.length>0 ? parseFloat((m.reduce((s,x) => s+hs(x.h),0)/m.length).toFixed(2)) : 0; }) },
   ];
   const m = metrics[activeMetric] || metrics[0];
   const minV = Math.min(...m.values);
