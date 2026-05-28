@@ -642,6 +642,40 @@ function GolfApp() {
                   );
                 })}
               </div>
+              {(() => {
+                const uClubs = CLUBS.filter(c => aShots.some(s => s.club===c && s.rating));
+                if (uClubs.length===0) return null;
+                return (
+                  <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"14px", padding:"1rem", marginBottom:"1rem" }}>
+                    <div style={{ color:"#9ca3af", fontSize:"0.72rem", letterSpacing:"0.1em", marginBottom:"0.8rem" }}>番手別ショット評価(累計)</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"2.5rem 1fr 1fr 1fr", gap:"0.3rem", marginBottom:"0.4rem" }}>
+                      <span />
+                      {RATINGS.map(r => <div key={r} style={{ textAlign:"center", fontSize:"0.75rem", color:RC[r], fontWeight:700 }}>{r}</div>)}
+                    </div>
+                    {uClubs.map(c => {
+                      const shots = aShots.filter(s => s.club===c && s.rating);
+                      const tot = shots.length;
+                      return (
+                        <div key={c} style={{ display:"grid", gridTemplateColumns:"2.5rem 1fr 1fr 1fr", gap:"0.3rem", marginBottom:"0.35rem", alignItems:"center" }}>
+                          <span style={{ fontSize:"0.75rem", color:"#9ca3af", fontWeight:600 }}>{c}</span>
+                          {RATINGS.map(r => {
+                            const cnt = shots.filter(s => s.rating===r).length;
+                            const pct = tot>0 ? Math.round((cnt/tot)*100) : 0;
+                            return (
+                              <div key={r} style={{ textAlign:"center" }}>
+                                <div style={{ padding:"0.2rem 0", borderRadius:"6px", background:cnt>0 ? RC[r]+"22" : "transparent", border:cnt>0 ? "1px solid "+RC[r]+"44" : "1px solid transparent" }}>
+                                  <div style={{ fontSize:"1rem", color:cnt>0 ? RC[r] : "#374151", fontWeight:700 }}>{cnt>0 ? cnt : "-"}</div>
+                                  {cnt>0 && <div style={{ fontSize:"0.55rem", color:RC[r], opacity:0.7 }}>{pct}%</div>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
               {rounds.length >= 2 && <TrendGraph rounds={rounds} activeMetric={activeMetric} setActiveMetric={setActiveMetric} />}
             </div>
           );
