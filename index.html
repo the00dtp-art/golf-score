@@ -91,7 +91,7 @@ function HoleCard({ hole, holeNum, par, onParChange, onShotsChange, onHoleChange
   const score = hs(hole);
   const diff = score - par;
   const dl = diff === 0 ? "E" : diff > 0 ? "+"+diff : ""+diff;
-  const dc = diff < -1 ? "#c084fc" : diff === -1 ? "#4ade80" : diff === 0 ? "#60a5fa" : "#f87171";
+  const dc = diff < 0 ? "#c084fc" : diff === 0 ? "#60a5fa" : diff === 1 ? "#4ade80" : "#f87171";
   const SS = { background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:"6px", color:"#e2e8f0", padding:"0.25rem 0.3rem", fontSize:"0.78rem", outline:"none", cursor:"pointer" };
 
   const addShot = () => onShotsChange([...hole.shots, { club:"", rating:"", ob:false, penalty:false, isPenaltyShot:false }]);
@@ -108,23 +108,23 @@ function HoleCard({ hole, holeNum, par, onParChange, onShotsChange, onHoleChange
   const hNum = String(holeNum).padStart(2,"0");
 
   return (
-    <div onClick={!isActive ? onClick : undefined} style={{ background:isActive ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)", border:isActive ? "1px solid rgba(99,179,237,0.5)" : "1px solid rgba(255,255,255,0.08)", borderRadius:"14px", marginBottom:"0.6rem", overflow:"hidden", cursor:isActive ? "default" : "pointer" }}>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0.7rem 1rem", background:isActive ? "rgba(99,179,237,0.1)" : "transparent" }} onClick={isActive ? onClick : undefined}>
-        <div style={{ display:"flex", alignItems:"center", gap:"0.8rem" }}>
-          <span style={{ fontSize:"1.1rem", color:"#e2e8f0", fontWeight:700 }}>HOLE {hNum}</span>
-          <div style={{ display:"flex", alignItems:"center", gap:"0.3rem" }}>
+    <div onClick={!isActive ? onClick : undefined} style={{ background:isActive?"rgba(255,255,255,0.07)":"rgba(255,255,255,0.03)", border:isActive?"1px solid #63b3ed":"1px solid #334155", borderRadius:"14px", marginBottom:"0.6rem", overflow:"hidden", cursor:isActive?"default":"pointer" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0.7rem 1rem", background:isActive?"rgba(99,179,237,0.1)":"transparent" }} onClick={isActive ? onClick : undefined}>
+        <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", minWidth:0, flex:1 }}>
+          <span style={{ fontSize:"1rem", color:"#e2e8f0", fontWeight:700, whiteSpace:"nowrap" }}>HOLE {hNum}</span>
+          <div style={{ display:"flex", alignItems:"center", gap:"0.3rem", flexShrink:0 }}>
             <span style={{ color:"#6b7280", fontSize:"0.72rem" }}>PAR</span>
             <select value={par} onChange={e => { e.stopPropagation(); onParChange(Number(e.target.value)); }} onClick={e => e.stopPropagation()} style={{ ...SS, width:"2.8rem", textAlign:"center" }}>
               {[3,4,5].map(p => <option key={p} value={p}>{p}</option>)}
             </select>
-            {score > 0 && <span style={{ fontSize:"1.1rem", color:dc, fontWeight:700, marginLeft:"0.2rem" }}>{score}</span>}
+            {score > 0 && <span style={{ fontSize:"1rem", color:dc, fontWeight:700 }}>{score}</span>}
           </div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:"0.5rem" }}>
-          {score > 0 && <span style={{ fontSize:"0.85rem", fontWeight:700, color:dc, background:dc+"22", padding:"0.15rem 0.45rem", borderRadius:"5px" }}>{dl}</span>}
-          {hole.parOn && <span style={{ fontSize:"0.65rem", color:"#4ade80", background:"rgba(74,222,128,0.15)", border:"1px solid rgba(74,222,128,0.3)", padding:"0.1rem 0.35rem", borderRadius:"4px" }}>GIR</span>}
-          {hole.putts > 0 && <span style={{ fontSize:"0.65rem", color:"#a78bfa", background:"rgba(167,139,250,0.15)", border:"1px solid rgba(167,139,250,0.3)", padding:"0.1rem 0.35rem", borderRadius:"4px" }}>{hole.putts}PT</span>}
-          <span style={{ color:"#6b7280", fontSize:"0.8rem" }}>{isActive ? "▲" : "▼"}</span>
+        <div style={{ display:"flex", alignItems:"center", gap:"0.4rem", flexShrink:0 }}>
+          {score > 0 && <span style={{ fontSize:"0.8rem", fontWeight:700, color:dc, background:dc+"22", padding:"0.15rem 0.4rem", borderRadius:"5px" }}>{dl}</span>}
+          {hole.parOn && <span style={{ fontSize:"0.65rem", color:"#63b3ed", background:"#1e40af44", border:"1px solid #63b3ed", padding:"0.1rem 0.35rem", borderRadius:"4px" }}>GIR</span>}
+          {hole.putts > 0 && <span style={{ fontSize:"0.65rem", color:"#a78bfa", background:"#4c1d9544", border:"1px solid #a78bfa", padding:"0.1rem 0.35rem", borderRadius:"4px" }}>{hole.putts}PT</span>}
+          <span style={{ color:"#6b7280", fontSize:"0.8rem" }}>{isActive?"▲":"▼"}</span>
         </div>
       </div>
       {isActive && (
@@ -156,7 +156,7 @@ function ScoreCard({ holes, pars }) {
       <div style={{ display:"grid", gridTemplateColumns:"repeat(19, 1fr)", gap:"0.1rem" }}>
         {holes.map((h,i) => {
           const s = hs(h); const d = s - pars[i];
-          const c = s===0 ? "#4b5563" : d<-1 ? "#c084fc" : d===-1 ? "#4ade80" : d===0 ? "#60a5fa" : "#f87171";
+          const c = s===0 ? "#4b5563" : d<0 ? "#c084fc" : d===0 ? "#60a5fa" : d===1 ? "#4ade80" : "#f87171";
           return (<div key={i} style={{ textAlign:"center" }}><div style={{ color:"#6b7280", fontSize:"0.5rem" }}>{i+1}</div><div style={{ color:c, fontWeight:700, fontSize:"0.8rem" }}>{s||"-"}</div></div>);
         })}
         <div style={{ textAlign:"center", borderLeft:"1px solid rgba(255,255,255,0.1)" }}>
@@ -242,7 +242,7 @@ function HistoryList({ rounds, onSelect, onDelete }) {
               {total > 0 && (
                 <>
                   <span style={{ fontSize:"1.5rem", color:"#e2e8f0", fontWeight:700 }}>{total}</span>
-                  <span style={{ fontSize:"0.8rem", fontWeight:700, color:diff<=0 ? "#4ade80" : "#f87171", background:diff<=0 ? "#4ade8022" : "#f8717122", padding:"0.15rem 0.45rem", borderRadius:"5px" }}>{diff===0 ? "E" : diff>0 ? "+"+diff : ""+diff}</span>
+                  <span style={{ fontSize:"0.8rem", fontWeight:700, color:diff<=0 ? "#60a5fa" : diff===1 ? "#4ade80" : "#f87171", background:diff<=0 ? "#60a5fa22" : diff===1 ? "#4ade8022" : "#f8717122", padding:"0.15rem 0.45rem", borderRadius:"5px" }}>{diff===0 ? "E" : diff>0 ? "+"+diff : ""+diff}</span>
                 </>
               )}
               <button onClick={() => onDelete(r.id)} style={{ background:"none", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"6px", color:"#6b7280", cursor:"pointer", fontSize:"0.72rem", padding:"0.2rem 0.5rem" }}>削除</button>
