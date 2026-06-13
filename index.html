@@ -150,6 +150,12 @@ function ScoreCard({ holes, pars }) {
   const total = holes.reduce((s,h) => s+hs(h), 0);
   const totalPar = pars.reduce((a,b) => a+b, 0);
   const diff = total - totalPar;
+  const front = holes.slice(0,9).reduce((s,h) => s+hs(h), 0);
+  const frontPar = pars.slice(0,9).reduce((a,b) => a+b, 0);
+  const back = holes.slice(9).reduce((s,h) => s+hs(h), 0);
+  const backPar = pars.slice(9).reduce((a,b) => a+b, 0);
+  const frontDiff = front - frontPar;
+  const backDiff = back - backPar;
   return (
     <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"14px", padding:"0.8rem", marginBottom:"1.2rem" }}>
       <div style={{ color:"#9ca3af", fontSize:"0.72rem", letterSpacing:"0.1em", marginBottom:"0.6rem" }}>SCORE CARD</div>
@@ -165,9 +171,16 @@ function ScoreCard({ holes, pars }) {
         </div>
       </div>
       {total > 0 && (
-        <div style={{ marginTop:"0.5rem", fontSize:"0.82rem", color:"#9ca3af" }}>
-          スコア：<span style={{ color:diff<=0 ? "#4ade80" : "#f87171", fontWeight:700 }}>{diff===0 ? "Even" : diff>0 ? "+"+diff : ""+diff}</span>
-          {" "}合計：<span style={{ color:"#e2e8f0", fontWeight:700 }}>{total}</span>{" "}Par {totalPar}
+        <div style={{ marginTop:"0.6rem" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"0.5rem", marginBottom:"0.5rem" }}>
+            {[["前半",front,frontDiff,frontPar],["後半",back,backDiff,backPar],["合計",total,diff,totalPar]].map(([label,score,d,par]) => (
+              <div key={label} style={{ textAlign:"center", background:"rgba(255,255,255,0.03)", borderRadius:"8px", padding:"0.4rem 0.2rem" }}>
+                <div style={{ color:"#6b7280", fontSize:"0.6rem", marginBottom:"0.2rem" }}>{label} Par{par}</div>
+                <div style={{ color:"#e2e8f0", fontWeight:700, fontSize:"1.3rem" }}>{score||"-"}</div>
+                {score > 0 && <div style={{ fontSize:"0.65rem", fontWeight:700, color:d<0?"#c084fc":d===0?"#60a5fa":d===1?"#4ade80":"#f87171" }}>{d===0?"Even":d>0?"+"+d:""+d}</div>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
