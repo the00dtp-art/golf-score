@@ -9,39 +9,72 @@
   <title>Golf Score</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0f172a; overflow-x: hidden; }
+    body { background: #0f172a; overflow-x: hidden; font-family: sans-serif; }
     select option { background: #1e293b; color: #e2e8f0; }
-    #root { min-height: 100vh; }
-    #loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: #63b3ed; font-family: sans-serif; font-size: 1rem; }
+    #loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; color: #63b3ed; gap: 1rem; }
+    #loading p { font-size: 0.85rem; color: #9ca3af; }
+    #error { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; color: #f87171; padding: 2rem; text-align: center; gap: 1rem; }
+    #error button { padding: 0.6rem 1.5rem; background: #63b3ed; color: #0f172a; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 700; cursor: pointer; }
   </style>
 </head>
 <body>
-  <div id="loading">読み込み中...</div>
+  <div id="loading">
+    <div style="font-size:1.5rem;font-weight:700;color:#63b3ed">⛳ GOLF SCORE</div>
+    <p>読み込み中...</p>
+  </div>
+  <div id="error">
+    <div style="font-size:1.2rem;font-weight:700">読み込みに失敗しました</div>
+    <p>インターネット接続を確認してページを再読み込みしてください</p>
+    <button onclick="location.reload()">再読み込み</button>
+  </div>
   <div id="root"></div>
 
   <script>
-    // React と ReactDOM を動的に読み込む
-    function loadScript(src, onload) {
-      var s = document.createElement('script');
-      s.src = src;
-      s.onload = onload;
-      s.onerror = function() {
-        document.getElementById('loading').textContent = '読み込みに失敗しました。ページを再読み込みしてください。';
-      };
-      document.head.appendChild(s);
+    var loaded = 0;
+    var total = 3;
+    var errored = false;
+
+    function onLoad() {
+      loaded++;
+      if (loaded === total && !errored) startApp();
     }
 
-    loadScript('https://unpkg.com/react@18/umd/react.production.min.js', function() {
-      loadScript('https://unpkg.com/react-dom@18/umd/react-dom.production.min.js', function() {
-        loadScript('https://unpkg.com/@babel/standalone/babel.min.js', function() {
-          document.getElementById('loading').style.display = 'none';
-          var script = document.createElement('script');
-          script.type = 'text/babel';
-          script.textContent = document.getElementById('app-code').textContent;
-          document.body.appendChild(script);
-          Babel.transformScriptTags();
-        });
-      });
+    function onError(name) {
+      if (errored) return;
+      errored = true;
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = 'flex';
+      console.error('Failed to load: ' + name);
+    }
+
+    function startApp() {
+      document.getElementById('loading').style.display = 'none';
+      try {
+        var code = document.getElementById('app-code').textContent;
+        var transformed = Babel.transform(code, { presets: ['react'] }).code;
+        var fn = new Function('React', 'ReactDOM', transformed + '\nreturn GolfApp;');
+        var GolfApp = fn(React, ReactDOM);
+        var root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(GolfApp));
+      } catch(e) {
+        document.getElementById('error').style.display = 'flex';
+        console.error(e);
+      }
+    }
+
+    // cdnjsからの読み込み（unpkgの代替）
+    var scripts = [
+      { src: 'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js', name: 'React' },
+      { src: 'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js', name: 'ReactDOM' },
+      { src: 'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.3/babel.min.js', name: 'Babel' }
+    ];
+
+    scripts.forEach(function(s) {
+      var el = document.createElement('script');
+      el.src = s.src;
+      el.onload = onLoad;
+      el.onerror = function() { onError(s.name); };
+      document.head.appendChild(el);
     });
   </script>
 
@@ -744,8 +777,6 @@ function GolfApp() {
     </div>
   );
 }
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<GolfApp />);
   </script>
 </body>
 </html>
