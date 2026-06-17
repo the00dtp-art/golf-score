@@ -7,18 +7,45 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Golf Score" />
   <title>Golf Score</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0f172a; overflow-x: hidden; }
     select option { background: #1e293b; color: #e2e8f0; }
+    #root { min-height: 100vh; }
+    #loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: #63b3ed; font-family: sans-serif; font-size: 1rem; }
   </style>
 </head>
 <body>
+  <div id="loading">読み込み中...</div>
   <div id="root"></div>
-  <script type="text/babel">
+
+  <script>
+    // React と ReactDOM を動的に読み込む
+    function loadScript(src, onload) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = onload;
+      s.onerror = function() {
+        document.getElementById('loading').textContent = '読み込みに失敗しました。ページを再読み込みしてください。';
+      };
+      document.head.appendChild(s);
+    }
+
+    loadScript('https://unpkg.com/react@18/umd/react.production.min.js', function() {
+      loadScript('https://unpkg.com/react-dom@18/umd/react-dom.production.min.js', function() {
+        loadScript('https://unpkg.com/@babel/standalone/babel.min.js', function() {
+          document.getElementById('loading').style.display = 'none';
+          var script = document.createElement('script');
+          script.type = 'text/babel';
+          script.textContent = document.getElementById('app-code').textContent;
+          document.body.appendChild(script);
+          Babel.transformScriptTags();
+        });
+      });
+    });
+  </script>
+
+  <script id="app-code" type="text/plain">
     const { useState, useEffect } = React;
 
 const CLUBS = ["1W", "3W", "5W", "7W", "5U", "6I", "7I", "8I", "9I", "PW", "GW", "SW", "PT"];
