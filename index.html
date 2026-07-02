@@ -62,7 +62,6 @@
       }
     }
 
-    // cdnjsからの読み込み（unpkgの代替）
     var scripts = [
       { src: 'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js', name: 'React' },
       { src: 'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js', name: 'ReactDOM' },
@@ -81,7 +80,7 @@
   <script id="app-code" type="text/plain">
     const { useState, useEffect } = React;
 
-const CLUBS = ["1W", "3W", "5W", "7W", "5U", "6I", "7I", "8I", "9I", "PW", "GW", "SW", "PT"];
+const CLUBS = ["1W", "3W", "5W", "7W", "5U", "6I", "7I", "8I", "9I", "PW", "48°", "52°", "56°", "PT"];
 const RATINGS = ["○", "△", "×"];
 const RC = { "○": "#4ade80", "△": "#facc15", "×": "#f87171" };
 const PRESETS = [{ name: "KOSHIGAYA GOLF CLUB", pars: [4,4,3,5,4,3,4,5,4,4,5,3,4,4,3,4,5,4] }];
